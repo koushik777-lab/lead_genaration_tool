@@ -1,9 +1,10 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Users, Kanban, Send, ChevronRight, Zap } from "lucide-react";
+import { LayoutDashboard, Users, Kanban, Send, ChevronRight, Zap, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/search", icon: Search, label: "Lead Discovery" },
   { href: "/leads", icon: Users, label: "Leads" },
   { href: "/crm", icon: Kanban, label: "CRM Pipeline" },
   { href: "/outreach", icon: Send, label: "Outreach" },
