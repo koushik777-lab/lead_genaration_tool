@@ -1,0 +1,9 @@
+at fast start the backend
+
+1. cd server
+2. npm run dev
+
+the start the frontend (+) parralary
+
+1. cd client
+2. npm run dev
