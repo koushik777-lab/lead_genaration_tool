@@ -125,13 +125,43 @@ export interface CrmPipelineResponse {
   stages: { stage: string; leads: Lead[] }[];
 }
 
+
 // ─── Fetch Helper ────────────────────────────────────────────────────────────
 
+import { navigateTo } from "@/lib/navigation";
+
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) },
+  const fetchOptions: RequestInit = {
     ...options,
-  });
+    headers: {
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+    credentials: "include", // SaaS requirement: Enable cookies
+  };
+
+  let res = await fetch(url, fetchOptions);
+
+  // If unauthorized, attempt to rotate refresh token
+  if (res.status === 401 && !url.includes("/auth/login") && !url.includes("/auth/refresh")) {
+    try {
+      const refreshRes = await fetch("/api/auth/refresh", { method: "POST", credentials: "include" });
+      if (refreshRes.ok) {
+        // Retry original request
+        res = await fetch(url, fetchOptions);
+      } else {
+        // Let the app handle logout + routing without a hard reload.
+        window.dispatchEvent(new Event("auth:logout"));
+        navigateTo("/login");
+        throw new Error("Session expired. Please login again.");
+      }
+    } catch (err) {
+      window.dispatchEvent(new Event("auth:logout"));
+      navigateTo("/login");
+      throw new Error("Session expired. Please login again.");
+    }
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as any).error || res.statusText);
@@ -215,4 +245,39 @@ export const apiOutreach = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+};
+
+export interface SearchResult {
+  type: "local" | "organic";
+  name: string;
+  address: string;
+  phone: string;
+  website: string;
+  rating: number | null;
+  reviews: number | null;
+  category: string;
+  hours: string;
+  thumbnail: string;
+  snippet?: string;
+  placeId: string;
+  googleMapsLink: string;
+}
+
+export interface SearchResponse {
+  query: string;
+  total: number;
+  results: SearchResult[];
+}
+
+export const apiSearch = {
+  businesses: (q: string) => apiFetch<SearchResponse>(`/api/search/businesses?q=${encodeURIComponent(q)}`),
+};
+
+export const apiAuth = {
+  login: (data: any) =>
+    apiFetch<any>("/api/auth/login", { method: "POST", body: JSON.stringify(data) }),
+  register: (data: any) =>
+    apiFetch<any>("/api/auth/register", { method: "POST", body: JSON.stringify(data) }),
+  me: () => apiFetch<any>("/api/auth/me"),
+  logout: () => apiFetch<any>("/api/auth/logout", { method: "POST" }),
 };

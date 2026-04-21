@@ -47,24 +47,39 @@ router.get("/", async (req, res) => {
 // POST /api/leads
 router.post("/", async (req, res) => {
   try {
-    const data = req.body;
-    if (!data.businessName) {
+    const {
+      businessName, ownerName, email, phone, whatsappActive,
+      website, linkedinProfile, companySize, industry,
+      location, country, techStack, noWebsite, poorSeo,
+      noSocialPresence, mobileUnfriendly, placeId, tags, crmStage
+    } = req.body;
+
+    if (!businessName) {
       return res.status(400).json({ error: "businessName is required" });
     }
 
+    // Duplicate check by placeId
+    if (placeId) {
+      const existing = await Lead.findOne({ placeId });
+      if (existing) return res.status(409).json({ error: "Lead already exists", leadId: existing.id });
+    }
+
     const { score, category } = computeScore({
-      noWebsite: data.noWebsite ?? false,
-      poorSeo: data.poorSeo ?? false,
-      mobileUnfriendly: data.mobileUnfriendly ?? false,
-      noSocialPresence: data.noSocialPresence ?? false,
+      noWebsite: noWebsite ?? false,
+      poorSeo: poorSeo ?? false,
+      mobileUnfriendly: mobileUnfriendly ?? false,
+      noSocialPresence: noSocialPresence ?? false,
     });
 
     const lead = await Lead.create({
-      ...data,
+      businessName, ownerName, email, phone, whatsappActive,
+      website, linkedinProfile, companySize, industry,
+      location, country, techStack, noWebsite, poorSeo,
+      noSocialPresence, mobileUnfriendly, placeId,
       leadScore: score,
       scoreCategory: category,
-      tags: data.tags ?? [],
-      crmStage: data.crmStage ?? "New Lead",
+      tags: tags ?? [],
+      crmStage: crmStage ?? "New Lead",
     });
 
     await Activity.create({
@@ -93,17 +108,35 @@ router.get("/:id", async (req, res) => {
 // PUT /api/leads/:id
 router.put("/:id", async (req, res) => {
   try {
-    const data = req.body;
+    const {
+      businessName, ownerName, email, phone, whatsappActive,
+      website, linkedinProfile, companySize, industry,
+      location, country, techStack, noWebsite, poorSeo,
+      noSocialPresence, mobileUnfriendly, tags, crmStage
+    } = req.body;
+
     const { score, category } = computeScore({
-      noWebsite: data.noWebsite,
-      poorSeo: data.poorSeo,
-      mobileUnfriendly: data.mobileUnfriendly,
-      noSocialPresence: data.noSocialPresence,
+      noWebsite,
+      poorSeo,
+      mobileUnfriendly,
+      noSocialPresence,
     });
+
+    const updateData = {
+      businessName, ownerName, email, phone, whatsappActive,
+      website, linkedinProfile, companySize, industry,
+      location, country, techStack, noWebsite, poorSeo,
+      noSocialPresence, mobileUnfriendly, tags, crmStage,
+      leadScore: score,
+      scoreCategory: category,
+    };
+
+    // Remove undefined fields
+    Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
 
     const lead = await Lead.findByIdAndUpdate(
       req.params.id,
-      { ...data, leadScore: score, scoreCategory: category },
+      updateData,
       { new: true, runValidators: true }
     );
 

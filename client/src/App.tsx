@@ -1,15 +1,23 @@
-import { Switch, Route } from "wouter";
+import { lazy, Suspense } from "react";
+import { Switch, Route, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
 import Layout from "@/components/Layout";
-import Dashboard from "@/pages/Dashboard";
-import Leads from "@/pages/Leads";
-import LeadDetail from "@/pages/LeadDetail";
-import CrmBoard from "@/pages/CrmBoard";
-import Outreach from "@/pages/Outreach";
-import Search from "@/pages/Search";
-import NotFound from "@/pages/not-found";
+import { Loader2 } from "lucide-react";
+
+// Lazy load pages for performance
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Leads = lazy(() => import("@/pages/Leads"));
+const LeadDetail = lazy(() => import("@/pages/LeadDetail"));
+const CrmBoard = lazy(() => import("@/pages/CrmBoard"));
+const Outreach = lazy(() => import("@/pages/Outreach"));
+const Search = lazy(() => import("@/pages/Search"));
+const Admin = lazy(() => import("@/pages/Admin"));
+const Login = lazy(() => import("@/pages/Login"));
+const Register = lazy(() => import("@/pages/Register"));
+const NotFound = lazy(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -20,19 +28,72 @@ const queryClient = new QueryClient({
   },
 });
 
+function ProtectedRoute({ component: Component, ...rest }: any) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Redirect to="/login" />;
+  }
+
+  return <Component {...rest} />;
+}
+
 function Router() {
   return (
-    <Layout>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      }
+    >
       <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/leads/:id" component={LeadDetail} />
-        <Route path="/leads" component={Leads} />
-        <Route path="/search" component={Search} />
-        <Route path="/crm" component={CrmBoard} />
-        <Route path="/outreach" component={Outreach} />
-        <Route component={NotFound} />
+        <Route path="/login">
+          <Login />
+        </Route>
+        <Route path="/register">
+          <Register />
+        </Route>
+        <Route path="*">
+          <Layout>
+            <Switch>
+              <Route path="/">
+                <ProtectedRoute component={Dashboard} />
+              </Route>
+              <Route path="/leads/:id">
+                {(params) => (
+                  <ProtectedRoute component={LeadDetail} id={params.id} />
+                )}
+              </Route>
+              <Route path="/leads">
+                <ProtectedRoute component={Leads} />
+              </Route>
+              <Route path="/search">
+                <ProtectedRoute component={Search} />
+              </Route>
+              <Route path="/admin">
+                <ProtectedRoute component={Admin} />
+              </Route>
+              <Route path="/crm">
+                <ProtectedRoute component={CrmBoard} />
+              </Route>
+              <Route path="/outreach">
+                <ProtectedRoute component={Outreach} />
+              </Route>
+              <Route component={NotFound} />
+            </Switch>
+          </Layout>
+        </Route>
       </Switch>
-    </Layout>
+    </Suspense>
   );
 }
 
@@ -40,8 +101,10 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <Router />
         <Toaster />
+        <AuthProvider>
+          <Router />
+        </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

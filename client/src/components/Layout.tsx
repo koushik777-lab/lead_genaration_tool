@@ -1,17 +1,24 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Users, Kanban, Send, ChevronRight, Zap, Search } from "lucide-react";
+import { LayoutDashboard, Users, Kanban, Send, ChevronRight, Zap, Search, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const navItems = [
-  { href: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/search", icon: Search, label: "Lead Discovery" },
-  { href: "/leads", icon: Users, label: "Leads" },
-  { href: "/crm", icon: Kanban, label: "CRM Pipeline" },
-  { href: "/outreach", icon: Send, label: "Outreach" },
-];
+import { useAuth } from "@/lib/auth-context";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const { user } = useAuth();
+
+  const navItems = [
+    { href: "/", icon: LayoutDashboard, label: "Dashboard" },
+    { href: "/search", icon: Search, label: "Lead Discovery" },
+    { href: "/leads", icon: Users, label: "Leads" },
+    { href: "/crm", icon: Kanban, label: "CRM Pipeline" },
+    { href: "/outreach", icon: Send, label: "Outreach" },
+  ];
+
+  // Dynamic Admin Link
+  if (user?.role === "admin") {
+    navItems.push({ href: "/admin", icon: Shield, label: "Admin Panel" });
+  }
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">

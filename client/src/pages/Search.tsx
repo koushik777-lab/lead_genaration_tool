@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Search as SearchIcon,
@@ -6,7 +6,6 @@ import {
   Phone,
   Globe,
   Star,
-  MessageSquare,
   Clock,
   Plus,
   Loader2,
@@ -19,28 +18,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
-interface SearchResult {
-  type: "local" | "organic";
-  name: string;
-  address: string;
-  phone: string;
-  website: string;
-  rating: number | null;
-  reviews: number | null;
-  category: string;
-  hours: string;
-  thumbnail: string;
-  snippet?: string;
-  placeId: string;
-  googleMapsLink: string;
-}
-
-interface SearchResponse {
-  query: string;
-  total: number;
-  results: SearchResult[];
-}
+import { apiSearch, apiLeads, type SearchResponse, type SearchResult } from "@/lib/api";
 
 const QUICK_SEARCHES = [
   "top IT companies in Kolkata",
@@ -58,8 +36,7 @@ export default function Search() {
   const [error, setError] = useState<string | null>(null);
   const [addingLeads, setAddingLeads] = useState<Set<number>>(new Set());
   const [addAllLoading, setAddAllLoading] = useState(false);
-  
-  // Category logic
+
   const [categoryName, setCategoryName] = useState("");
   const [showCategoryModal, setShowCategoryModal] = useState(true);
   const [tempCategory, setTempCategory] = useState("");
@@ -82,14 +59,7 @@ export default function Search() {
     setData(null);
 
     try {
-      const res = await fetch(
-        `/api/search/businesses?q=${encodeURIComponent(q.trim())}`
-      );
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Search failed" }));
-        throw new Error(err.error || "Search failed");
-      }
-      const json: SearchResponse = await res.json();
+      const json = await apiSearch.businesses(q.trim());
       setData(json);
     } catch (err: any) {
       setError(err.message || "Something went wrong");
@@ -108,7 +78,11 @@ export default function Search() {
     doSearch(q);
   };
 
-  const addAsLead = async (result: SearchResult, index: number, silent = false) => {
+  const addAsLead = async (
+    result: SearchResult,
+    index: number,
+    silent = false,
+  ) => {
     if (!silent) setAddingLeads((prev) => new Set(prev).add(index));
     try {
       const domainMatch = result.website
@@ -128,18 +102,29 @@ export default function Search() {
         industry: result.category || "Technology",
         location: result.address || "",
         companySize: "1-10",
-        notes: result.snippet || `Found via Google search in category: "${categoryName}"`,
-        tags: [categoryName], // Automatically add the category as a tag
+        notes:
+          result.snippet ||
+          `Found via Google search in category: "${categoryName}"`,
+        tags: [categoryName],
+        placeId: result.placeId,
       };
 
-      const res = await fetch(`/api/leads`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      await apiLeads.create(body);
+
+      if (res.status === 409) {
+        if (!silent) {
+          toast({
+            title: "Lead already exists",
+            description: `${result.name} is already in your CRM.`,
+          });
+        }
+        return true;
+      }
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Failed to add lead" }));
+        const err = await res
+          .json()
+          .catch(() => ({ error: "Failed to add lead" }));
         throw new Error(err.error || "Failed to add lead");
       }
 
@@ -202,9 +187,12 @@ export default function Search() {
             <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-6">
               <Tags className="w-6 h-6 text-primary" />
             </div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Setup Your Search</h2>
+            <h2 className="text-2xl font-bold text-foreground mb-2">
+              Setup Your Search
+            </h2>
             <p className="text-sm text-muted-foreground mb-6">
-              Enter a category name. All leads found during this session will be organized under this tag.
+              Enter a category name. All leads found during this session will be
+              organized under this tag.
             </p>
             <form onSubmit={handleCategorySubmit} className="space-y-4">
               <div>
@@ -220,7 +208,11 @@ export default function Search() {
                   required
                 />
               </div>
-              <Button type="submit" className="w-full h-12 text-base font-semibold" disabled={!tempCategory.trim()}>
+              <Button
+                type="submit"
+                className="w-full h-12 text-base font-semibold"
+                disabled={!tempCategory.trim()}
+              >
                 Start Lead Discovery
               </Button>
             </form>
@@ -231,13 +223,20 @@ export default function Search() {
       {/* Header */}
       <div className="border-b border-border px-6 py-4 flex-shrink-0 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Lead Discovery</h1>
+          <h1 className="text-xl font-semibold text-foreground">
+            Lead Discovery
+          </h1>
           <div className="flex items-center gap-2 mt-0.5">
-            <p className="text-sm text-muted-foreground">Discover businesses & import them into</p>
-            <Badge variant="secondary" className="px-2 py-0 h-5 text-[10px] font-bold bg-primary/10 text-primary border-primary/20">
+            <p className="text-sm text-muted-foreground">
+              Discover businesses & import them into
+            </p>
+            <Badge
+              variant="secondary"
+              className="px-2 py-0 h-5 text-[10px] font-bold bg-primary/10 text-primary border-primary/20"
+            >
               {categoryName || "Uncategorized"}
             </Badge>
-            <button 
+            <button
               onClick={() => setShowCategoryModal(true)}
               className="text-[10px] text-primary hover:underline ml-1"
             >
@@ -261,7 +260,11 @@ export default function Search() {
               autoFocus={!showCategoryModal}
             />
           </div>
-          <Button type="submit" disabled={loading || !query.trim()} className="h-10 px-5">
+          <Button
+            type="submit"
+            disabled={loading || !query.trim()}
+            className="h-10 px-5"
+          >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
@@ -276,7 +279,9 @@ export default function Search() {
         {/* Quick searches */}
         {!data && !loading && (
           <div className="mt-4">
-            <p className="text-xs text-muted-foreground mb-2">Quick searches:</p>
+            <p className="text-xs text-muted-foreground mb-2">
+              Quick searches:
+            </p>
             <div className="flex flex-wrap gap-2">
               {QUICK_SEARCHES.map((qs) => (
                 <button
@@ -297,7 +302,9 @@ export default function Search() {
         {loading && (
           <div className="flex flex-col items-center justify-center py-24 gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Searching Google Maps...</p>
+            <p className="text-sm text-muted-foreground">
+              Searching Google Maps...
+            </p>
           </div>
         )}
 
@@ -314,8 +321,12 @@ export default function Search() {
         {data && data.results.length === 0 && (
           <div className="flex flex-col items-center justify-center py-24 gap-3">
             <Building2 className="w-10 h-10 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">No results found for "{data.query}"</p>
-            <p className="text-xs text-muted-foreground/60">Try a different search term</p>
+            <p className="text-sm text-muted-foreground">
+              No results found for "{data.query}"
+            </p>
+            <p className="text-xs text-muted-foreground/60">
+              Try a different search term
+            </p>
           </div>
         )}
 
@@ -323,11 +334,15 @@ export default function Search() {
           <>
             <div className="flex items-center justify-between mb-6 pb-4 border-b border-border/50">
               <p className="text-sm text-muted-foreground">
-                Showing <span className="font-bold text-foreground">{data.results.length}</span> results for{" "}
+                Showing{" "}
+                <span className="font-bold text-foreground">
+                  {data.results.length}
+                </span>{" "}
+                results for{" "}
                 <span className="text-primary italic">"{data.query}"</span>
               </p>
-              <Button 
-                onClick={handleAddAll} 
+              <Button
+                onClick={handleAddAll}
                 disabled={addAllLoading}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white h-9 px-4 text-xs font-bold gap-2 shadow-lg shadow-emerald-900/20"
               >
@@ -412,13 +427,21 @@ export default function Search() {
                       )}
                       {result.website && (
                         <a
-                          href={result.website.startsWith("http") ? result.website : `https://${result.website}`}
+                          href={
+                            result.website.startsWith("http")
+                              ? result.website
+                              : `https://${result.website}`
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-1 text-xs text-primary hover:underline"
                         >
                           <Globe className="w-3 h-3" />
-                          {result.website.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]}
+                          {
+                            result.website
+                              .replace(/^https?:\/\/(www\.)?/, "")
+                              .split("/")[0]
+                          }
                           <ExternalLink className="w-2.5 h-2.5" />
                         </a>
                       )}
@@ -453,9 +476,13 @@ export default function Search() {
               <SearchIcon className="w-8 h-8 text-primary" />
             </div>
             <div className="text-center">
-              <p className="text-sm font-medium text-foreground">Ready for Search</p>
+              <p className="text-sm font-medium text-foreground">
+                Ready for Search
+              </p>
               <p className="text-xs text-muted-foreground mt-1 max-w-xs">
-                Searching for leads in the <span className="text-primary font-bold">"{categoryName}"</span> category.
+                Searching for leads in the{" "}
+                <span className="text-primary font-bold">"{categoryName}"</span>{" "}
+                category.
               </p>
             </div>
           </div>
