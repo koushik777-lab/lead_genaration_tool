@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Users, Kanban, Send, ChevronRight, Zap, Search } from "lucide-react";
+import { LayoutDashboard, Users, Kanban, Share2, ChevronRight, Zap, Search, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -7,7 +7,8 @@ const navItems = [
   { href: "/search", icon: Search, label: "Lead Discovery" },
   { href: "/leads", icon: Users, label: "Leads" },
   { href: "/crm", icon: Kanban, label: "CRM Pipeline" },
-  { href: "/outreach", icon: Send, label: "Outreach" },
+  { href: "/crm-push", icon: Share2, label: "Send to CRM" },
+  { href: "/outreach", icon: MessageSquare, label: "Outreach Automations" },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -33,7 +34,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {navItems.map((item) => {
             const isActive = item.href === "/"
               ? location === "/"
-              : location.startsWith(item.href);
+              : location === item.href || location.startsWith(item.href + '/');
 
             return (
               <Link

@@ -19,10 +19,13 @@ export default function LeadDetail() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [noteText, setNoteText] = useState("");
+  const [isEditingContact, setIsEditingContact] = useState(false);
+  const [editForm, setEditForm] = useState({ email: "", phone: "" });
 
   const { data: lead, isLoading } = useGetLead(id);
   const { data: notes } = useGetLeadNotes(id);
   const updateStage = useUpdateLeadStage();
+  const updateLead = useUpdateLead();
   const addNote = useAddLeadNote();
 
   if (isLoading) {
@@ -68,6 +71,20 @@ export default function LeadDetail() {
     });
   };
 
+  const startEditContact = () => {
+    setEditForm({ email: lead.email || "", phone: lead.phone || "" });
+    setIsEditingContact(true);
+  };
+
+  const saveContactChanges = () => {
+    updateLead.mutate({ id, data: editForm }, {
+      onSuccess: () => {
+        setIsEditingContact(false);
+        toast({ title: "Contact info updated" });
+      },
+    });
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -102,34 +119,71 @@ export default function LeadDetail() {
         <div className="lg:col-span-2 space-y-4">
           {/* Contact Details */}
           <div className="bg-card border border-card-border rounded-lg p-4">
-            <h3 className="text-sm font-medium text-foreground mb-3">Contact Information</h3>
-            <div className="grid grid-cols-2 gap-3">
-              {lead.email && (
-                <InfoItem icon={Mail} label="Email">
-                  <a href={`mailto:${lead.email}`} className="text-blue-400 hover:underline text-sm">{lead.email}</a>
-                </InfoItem>
-              )}
-              {lead.phone && (
-                <InfoItem icon={Phone} label="Phone">
-                  <span className="text-sm text-foreground">{lead.phone}</span>
-                </InfoItem>
-              )}
-              {lead.website && (
-                <InfoItem icon={Globe} label="Website">
-                  <a href={lead.website} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline text-sm truncate">{lead.website}</a>
-                </InfoItem>
-              )}
-              {lead.linkedinProfile && (
-                <InfoItem icon={Linkedin} label="LinkedIn">
-                  <a href={lead.linkedinProfile} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline text-sm">View Profile</a>
-                </InfoItem>
-              )}
-              {lead.whatsappActive && (
-                <InfoItem icon={MessageCircle} label="WhatsApp">
-                  <span className="text-sm text-green-400">Active</span>
-                </InfoItem>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-foreground">Contact Information</h3>
+              {!isEditingContact ? (
+                <button onClick={startEditContact} className="text-xs text-primary hover:underline">Edit</button>
+              ) : (
+                <div className="flex gap-2">
+                  <button onClick={() => setIsEditingContact(false)} className="text-xs text-muted-foreground hover:underline">Cancel</button>
+                  <button onClick={saveContactChanges} disabled={updateLead.isPending} className="text-xs text-primary font-bold hover:underline">Save</button>
+                </div>
               )}
             </div>
+            {isEditingContact ? (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] text-muted-foreground uppercase font-bold block mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+                    className="w-full px-2 py-1.5 bg-background border border-border rounded text-sm text-foreground focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground uppercase font-bold block mb-1">Phone</label>
+                  <input
+                    type="text"
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, phone: e.target.value }))}
+                    className="w-full px-2 py-1.5 bg-background border border-border rounded text-sm text-foreground focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <InfoItem icon={Mail} label="Email">
+                  {lead.email ? (
+                    <a href={`mailto:${lead.email}`} className="text-blue-400 hover:underline text-sm">{lead.email}</a>
+                  ) : (
+                    <span className="text-sm text-muted-foreground italic">— empty —</span>
+                  )}
+                </InfoItem>
+                <InfoItem icon={Phone} label="Phone">
+                  {lead.phone ? (
+                    <span className="text-sm text-foreground">{lead.phone}</span>
+                  ) : (
+                    <span className="text-sm text-muted-foreground italic">— empty —</span>
+                  )}
+                </InfoItem>
+                {lead.website && (
+                  <InfoItem icon={Globe} label="Website">
+                    <a href={lead.website} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline text-sm truncate">{lead.website}</a>
+                  </InfoItem>
+                )}
+                {lead.linkedinProfile && (
+                  <InfoItem icon={Linkedin} label="LinkedIn">
+                    <a href={lead.linkedinProfile} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline text-sm">View Profile</a>
+                  </InfoItem>
+                )}
+                {lead.whatsappActive && (
+                  <InfoItem icon={MessageCircle} label="WhatsApp">
+                    <span className="text-sm text-green-400">Active</span>
+                  </InfoItem>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Business Details */}
@@ -176,16 +230,6 @@ export default function LeadDetail() {
               <p className="text-sm text-foreground">{lead.aiInsight}</p>
             </div>
           )}
-
-          {/* Tags */}
-          {lead.tags && lead.tags.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <Tag className="w-3.5 h-3.5 text-muted-foreground" />
-              {lead.tags.map((tag) => (
-                <span key={tag} className="px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground">{tag}</span>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Right - Notes */}
@@ -194,11 +238,11 @@ export default function LeadDetail() {
             <Clock className="w-4 h-4 text-muted-foreground" />
             Notes
           </h3>
-          <div className="space-y-3 mb-4 max-h-64 overflow-y-auto">
+          <div className="space-y-3 mb-4 max-h-96 overflow-y-auto">
             {notes && notes.length > 0 ? notes.map((note) => (
-              <div key={note.id} className="border-l-2 border-primary/30 pl-3">
+              <div key={note.id} className="border-l-2 border-primary/30 pl-3 py-1">
                 <p className="text-sm text-foreground">{note.content}</p>
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-[10px] text-muted-foreground mt-1">
                   {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
                 </p>
               </div>
@@ -232,8 +276,8 @@ function InfoItem({ icon: Icon, label, children }: { icon: React.ElementType; la
   return (
     <div className="flex items-start gap-2">
       <Icon className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-      <div>
-        <span className="text-xs text-muted-foreground block">{label}</span>
+      <div className="min-w-0 flex-1">
+        <span className="text-[10px] text-muted-foreground uppercase font-bold block leading-none mb-1">{label}</span>
         {children}
       </div>
     </div>
@@ -242,9 +286,9 @@ function InfoItem({ icon: Icon, label, children }: { icon: React.ElementType; la
 
 function FlagBadge({ label, points }: { label: string; points: number }) {
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
       {label}
-      <span className="text-amber-500/60">+{points}pts</span>
+      <span className="text-amber-500/60 font-medium">+{points}</span>
     </span>
   );
 }

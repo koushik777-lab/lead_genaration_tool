@@ -25,6 +25,9 @@ export interface Lead {
   noSocialPresence: boolean;
   mobileUnfriendly: boolean;
   aiInsight?: string | null;
+  pushStatus: "pending" | "sent" | "failed";
+  sentAt?: string | null;
+  errorMessage?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -44,6 +47,8 @@ export interface Note {
   createdAt: string;
   updatedAt: string;
 }
+
+
 
 export interface Campaign {
   id: string;
@@ -84,6 +89,7 @@ export interface DashboardStats {
   contactedLeads: number;
   qualifiedLeads: number;
   closedWon: number;
+  crmPushedCount: number;
   activeCampaigns: number;
   emailsSentThisMonth: number;
   avgLeadScore: number;
@@ -152,8 +158,9 @@ export const getGetLeadNotesQueryKey = (id: string) =>
 
 export const getGetCrmPipelineQueryKey = () => ["/api/crm/pipeline"] as const;
 
-export const getListCampaignsQueryKey = () => ["/api/outreach/campaigns"] as const;
 
+
+export const getListCampaignsQueryKey = () => ["/api/outreach/campaigns"] as const;
 export const getListTemplatesQueryKey = () => ["/api/outreach/templates"] as const;
 
 // ─── API Functions ───────────────────────────────────────────────────────────
@@ -201,6 +208,20 @@ export const apiCrm = {
     }),
 };
 
+export const apiCrmPush = {
+  pushLeads: (leadIds: string[]) =>
+    apiFetch<{
+      totalRequested: number;
+      processed: number;
+      succeeded: number;
+      failed: number;
+      details: { id: string; status: string; reason?: string }[];
+    }>("/api/push-to-crm", {
+      method: "POST",
+      body: JSON.stringify({ leadIds }),
+    }),
+};
+
 export const apiOutreach = {
   campaigns: () => apiFetch<Campaign[]>("/api/outreach/campaigns"),
   getCampaign: (id: string) => apiFetch<Campaign>(`/api/outreach/campaigns/${id}`),
@@ -208,6 +229,10 @@ export const apiOutreach = {
     apiFetch<Campaign>("/api/outreach/campaigns", {
       method: "POST",
       body: JSON.stringify(data),
+    }),
+  toggleCampaignStatus: (id: string) => 
+    apiFetch<Campaign>(`/api/outreach/campaigns/${id}/toggle`, {
+      method: "POST"
     }),
   templates: () => apiFetch<Template[]>("/api/outreach/templates"),
   createTemplate: (data: { name: string; channel: string; subject?: string; body: string }) =>

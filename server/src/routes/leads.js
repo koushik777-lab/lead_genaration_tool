@@ -28,7 +28,13 @@ router.get("/", async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     const filter = {};
-    if (search) filter.businessName = { $regex: search, $options: "i" };
+    if (search) {
+      filter.$or = [
+        { businessName: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { phone: { $regex: search, $options: "i" } },
+      ];
+    }
     if (score) filter.scoreCategory = score;
     if (industry) filter.industry = industry;
     if (status) filter.crmStage = status;
@@ -41,6 +47,52 @@ router.get("/", async (req, res) => {
     res.json({ leads, total, page: pageNum, limit: limitNum });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/leads/bulk
+router.post("/bulk", async (req, res) => {
+  try {
+    const { leads } = req.body;
+    if (!Array.isArray(leads)) {
+      return res.status(400).json({ error: "leads array is required" });
+    }
+
+    const processedLeads = leads.map(data => {
+      const { score, category } = computeScore({
+        noWebsite: data.noWebsite ?? false,
+        poorSeo: data.poorSeo ?? false,
+        mobileUnfriendly: data.mobileUnfriendly ?? false,
+        noSocialPresence: data.noSocialPresence ?? false,
+      });
+      return {
+        ...data,
+        leadScore: score,
+        scoreCategory: category,
+        tags: data.tags ?? [],
+        crmStage: data.crmStage ?? "New Lead",
+      };
+    });
+
+    const results = await Lead.insertMany(processedLeads, { ordered: false });
+    
+    await Activity.create({
+      type: "bulk_lead_import",
+      description: `Imported ${results.length} leads via discovery`,
+    });
+
+    res.status(201).json({ count: results.length });
+  } catch (err) {
+    // If some succeeded but others failed (due to unique constraints if any etc)
+    if (err.writeErrors) {
+      res.status(207).json({ 
+        count: err.insertedDocs?.length || 0, 
+        error: "Some leads failed to import",
+        details: err.writeErrors.map(e => e.errmsg) 
+      });
+    } else {
+      res.status(500).json({ error: err.message });
+    }
   }
 });
 
@@ -124,13 +176,20 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
+
+
 // DELETE /api/leads (Bulk delete by tag)
 router.delete("/", async (req, res) => {
   try {
     const { tag } = req.query;
     if (!tag) return res.status(400).json({ error: "tag parameter is required" });
 
-    const result = await Lead.deleteMany({ tags: tag });
+    const result = await Lead.deleteMany({ 
+      $or: [
+        { tags: tag },
+        { scoreCategory: tag }
+      ]
+    });
     res.json({ message: `Successfully deleted ${result.deletedCount} leads`, deletedCount: result.deletedCount });
   } catch (err) {
     res.status(500).json({ error: err.message });

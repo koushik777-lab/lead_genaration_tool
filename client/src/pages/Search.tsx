@@ -59,21 +59,12 @@ export default function Search() {
   const [addingLeads, setAddingLeads] = useState<Set<number>>(new Set());
   const [addAllLoading, setAddAllLoading] = useState(false);
   
-  // Category logic
-  const [categoryName, setCategoryName] = useState("");
-  const [showCategoryModal, setShowCategoryModal] = useState(true);
-  const [tempCategory, setTempCategory] = useState("");
+
 
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const handleCategorySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (tempCategory.trim()) {
-      setCategoryName(tempCategory.trim());
-      setShowCategoryModal(false);
-    }
-  };
+
 
   const doSearch = async (q: string) => {
     if (!q.trim()) return;
@@ -128,8 +119,7 @@ export default function Search() {
         industry: result.category || "Technology",
         location: result.address || "",
         companySize: "1-10",
-        notes: result.snippet || `Found via Google search in category: "${categoryName}"`,
-        tags: [categoryName], // Automatically add the category as a tag
+        notes: result.snippet || `Found via Google search`,
       };
 
       const res = await fetch(`/api/leads`, {
@@ -146,7 +136,7 @@ export default function Search() {
       if (!silent) {
         toast({
           title: "Lead added!",
-          description: `${result.name} has been added to ${categoryName}.`,
+          description: `${result.name} has been added to your leads.`,
         });
       }
       return true;
@@ -170,79 +160,88 @@ export default function Search() {
     }
   };
 
+  const formatPhone = (phone: string, address: string) => {
+    if (!phone) return "";
+    const clean = phone.replace(/\D/g, "");
+    const isIndia = address.toLowerCase().includes("india") || address.toLowerCase().match(/\b(delhi|mumbai|kolkata|bangalore|chennai|hyderabad|pune|gujarat|rajasthan|karnataka)\b/i);
+    
+    if (isIndia) {
+      if (clean.length === 10) return `+91 ${clean.slice(0, 5)}-${clean.slice(5)}`;
+      if (clean.length === 12 && clean.startsWith("91")) return `+91 ${clean.slice(2, 7)}-${clean.slice(7)}`;
+    }
+    // Default international format
+    return phone.startsWith("+") ? phone : `+${clean}`;
+  };
+
   const handleAddAll = async () => {
     if (!data || data.results.length === 0) return;
     setAddAllLoading(true);
-    let successCount = 0;
 
     toast({
-      title: "Adding all leads...",
-      description: `Please wait while we import ${data.results.length} leads into "${categoryName}".`,
+      title: "Bulk Import Started",
+      description: `Importing ${data.results.length} leads...`,
     });
 
-    for (let i = 0; i < data.results.length; i++) {
-      const success = await addAsLead(data.results[i], i, true);
-      if (success) successCount++;
+    try {
+      const leadsToProcess = data.results.map(result => {
+        const domainMatch = result.website
+          ? result.website.match(/^(?:https?:\/\/)?(?:www\.)?([^\/]+)/)
+          : null;
+        const domain = domainMatch ? domainMatch[1] : "";
+        const parts = result.name.split(" ");
+
+        return {
+          businessName: result.name,
+          googlePlaceId: result.placeId, // Send unique ID
+          contactName: parts.slice(0, 2).join(" "),
+          email: domain ? `info@${domain}` : "",
+          phone: formatPhone(result.phone, result.address),
+          website: result.website || "",
+          industry: result.category || "Technology",
+          location: result.address || "",
+          companySize: "1-10",
+          tags: ["Discovery"], // Default tag for bulk management
+          notes: result.snippet || `Found via Lead Discovery search`,
+        };
+      });
+
+      const res = await fetch(`/api/leads/bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leads: leadsToProcess }),
+      });
+
+      const result = await res.json();
+      
+      if (res.status === 201 || res.status === 207) {
+        toast({
+          title: "Bulk Import Complete",
+          description: `Successfully added ${result.count} new leads. (Duplicates skipped automatically)`,
+        });
+      } else {
+        throw new Error(result.error || "Bulk import failed");
+      }
+    } catch (err: any) {
+      toast({
+        title: "Bulk Import Failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setAddAllLoading(false);
     }
-
-    setAddAllLoading(false);
-    toast({
-      title: "Bulk Import Complete",
-      description: `Successfully added ${successCount} leads to the "${categoryName}" category.`,
-      variant: successCount > 0 ? "default" : "destructive",
-    });
   };
 
   return (
     <div className="flex flex-col h-full relative">
-      {/* Category Selection Modal */}
-      {showCategoryModal && (
-        <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-md p-8 animate-in fade-in zoom-in duration-300">
-            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-6">
-              <Tags className="w-6 h-6 text-primary" />
-            </div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Setup Your Search</h2>
-            <p className="text-sm text-muted-foreground mb-6">
-              Enter a category name. All leads found during this session will be organized under this tag.
-            </p>
-            <form onSubmit={handleCategorySubmit} className="space-y-4">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
-                  Lead Category Name
-                </label>
-                <Input
-                  value={tempCategory}
-                  onChange={(e) => setTempCategory(e.target.value)}
-                  placeholder="e.g. Kolkata Food Manufacturers"
-                  className="h-12 bg-background/50"
-                  autoFocus
-                  required
-                />
-              </div>
-              <Button type="submit" className="w-full h-12 text-base font-semibold" disabled={!tempCategory.trim()}>
-                Start Lead Discovery
-              </Button>
-            </form>
-          </div>
-        </div>
-      )}
+
 
       {/* Header */}
       <div className="border-b border-border px-6 py-4 flex-shrink-0 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-foreground">Lead Discovery</h1>
           <div className="flex items-center gap-2 mt-0.5">
-            <p className="text-sm text-muted-foreground">Discover businesses & import them into</p>
-            <Badge variant="secondary" className="px-2 py-0 h-5 text-[10px] font-bold bg-primary/10 text-primary border-primary/20">
-              {categoryName || "Uncategorized"}
-            </Badge>
-            <button 
-              onClick={() => setShowCategoryModal(true)}
-              className="text-[10px] text-primary hover:underline ml-1"
-            >
-              Change
-            </button>
+            <p className="text-sm text-muted-foreground">Discover businesses & import them into your database</p>
           </div>
         </div>
       </div>
@@ -258,7 +257,7 @@ export default function Search() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder='e.g. "food manufacturing company in kolkata"'
               className="pl-9 bg-background border-border h-10 text-sm"
-              autoFocus={!showCategoryModal}
+              autoFocus
             />
           </div>
           <Button type="submit" disabled={loading || !query.trim()} className="h-10 px-5">
@@ -336,7 +335,7 @@ export default function Search() {
                 ) : (
                   <CheckCircle2 className="w-3.5 h-3.5" />
                 )}
-                Add All Leads to "{categoryName}"
+                Add All Leads
               </Button>
             </div>
 
@@ -455,7 +454,7 @@ export default function Search() {
             <div className="text-center">
               <p className="text-sm font-medium text-foreground">Ready for Search</p>
               <p className="text-xs text-muted-foreground mt-1 max-w-xs">
-                Searching for leads in the <span className="text-primary font-bold">"{categoryName}"</span> category.
+                Search for businesses and add them as leads to start your outreach.
               </p>
             </div>
           </div>

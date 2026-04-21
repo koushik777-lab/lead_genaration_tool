@@ -1,6 +1,6 @@
 import { useGetDashboardStats, useGetLeadScoreBreakdown, useGetPipelineValues, useGetRecentActivity, useGetIndustryBreakdown } from "@/lib/hooks";
 import { BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
-import { Users, TrendingUp, Flame, Mail, CheckCircle, BarChart2, Clock, Building2 } from "lucide-react";
+import { Users, TrendingUp, Flame, Mail, CheckCircle, BarChart2, Clock, Building2, Share2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 const SCORE_COLORS = { Hot: "#ef4444", Warm: "#f59e0b", Cold: "#3b82f6" };
@@ -58,12 +58,13 @@ export default function Dashboard() {
           <>
             <StatCard icon={Users} label="Total Leads" value={stats.totalLeads} sub={`Avg. score: ${stats.avgLeadScore}`} />
             <StatCard icon={Flame} label="Hot Leads" value={stats.hotLeads} sub="Ready to close" color="bg-red-500/80" />
-            <StatCard icon={TrendingUp} label="Qualified" value={stats.qualifiedLeads} sub="In pipeline" color="bg-amber-500/80" />
+            <StatCard icon={TrendingUp} label="Warm Leads" value={stats.warmLeads} sub="Nurturing" color="bg-amber-500/80" />
+            <StatCard icon={Users} label="Cold Leads" value={stats.coldLeads} sub="Discovery" color="bg-blue-500/80" />
+            
             <StatCard icon={CheckCircle} label="Closed Won" value={stats.closedWon} sub="Converted" color="bg-green-500/80" />
-            <StatCard icon={Mail} label="Active Campaigns" value={stats.activeCampaigns} />
+            <StatCard icon={Share2} label="Pushed to CRM" value={stats.crmPushedCount} sub="Synced total" color="bg-indigo-500/80" />
+            <StatCard icon={Mail} label="Active Campaigns" value={stats.activeCampaigns} color="bg-purple-500/80" />
             <StatCard icon={BarChart2} label="Emails Sent" value={stats.emailsSentThisMonth} sub="This month" />
-            <StatCard icon={Users} label="Warm Leads" value={stats.warmLeads} sub="Needs nurturing" />
-            <StatCard icon={Users} label="Cold Leads" value={stats.coldLeads} sub="Needs qualification" />
           </>
         ) : null}
       </div>

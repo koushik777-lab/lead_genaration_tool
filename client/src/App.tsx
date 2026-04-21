@@ -7,6 +7,7 @@ import Dashboard from "@/pages/Dashboard";
 import Leads from "@/pages/Leads";
 import LeadDetail from "@/pages/LeadDetail";
 import CrmBoard from "@/pages/CrmBoard";
+import CrmPush from "@/pages/CrmPush";
 import Outreach from "@/pages/Outreach";
 import Search from "@/pages/Search";
 import NotFound from "@/pages/not-found";
@@ -29,6 +30,7 @@ function Router() {
         <Route path="/leads" component={Leads} />
         <Route path="/search" component={Search} />
         <Route path="/crm" component={CrmBoard} />
+        <Route path="/crm-push" component={CrmPush} />
         <Route path="/outreach" component={Outreach} />
         <Route component={NotFound} />
       </Switch>

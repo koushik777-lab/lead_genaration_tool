@@ -3,7 +3,7 @@ import { useListLeads, useCreateLead, useDeleteLead, useBulkDeleteLeads, getList
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import ScoreBadge from "@/components/ScoreBadge";
-import { Search, Plus, Trash2, ExternalLink, Globe, Globe2, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
+import { Search, Plus, Trash2, ExternalLink, Globe, Globe2, ChevronLeft, ChevronRight, AlertTriangle, Mail, Phone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ export default function Leads() {
   const [score, setScore] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showCreate, setShowCreate] = useState(false);
   const [selectedBulkTag, setSelectedBulkTag] = useState("");
   const { toast } = useToast();
@@ -31,19 +32,54 @@ export default function Leads() {
 
   const { data, isLoading } = useListLeads(params);
 
-  const deleteLead = useDeleteLead();
-  const createLead = useCreateLead();
-  const bulkDelete = useBulkDeleteLeads();
-
   const leads = data?.leads ?? [];
   const total = data?.total ?? 0;
 
   // Extract all unique tags for bulk delete targeting
   const allTags = useMemo(() => {
     const tags = new Set<string>();
+    // Add standard categories first
+    ["Hot", "Warm", "Cold"].forEach(t => tags.add(t));
+    // Add lead-specific tags
     leads.forEach(l => l.tags?.forEach(t => tags.add(t)));
     return Array.from(tags).sort();
   }, [leads]);
+
+  // Toggle selection for individual lead
+  const toggleSelect = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  };
+
+  // Select/Deselect all visible leads
+  const toggleSelectAll = () => {
+    if (selectedIds.size === leads.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(leads.map(l => l.id)));
+  };
+
+  const deleteLead = useDeleteLead();
+  const createLead = useCreateLead();
+  const bulkDelete = useBulkDeleteLeads();
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedIds.size} selected leads?`)) return;
+
+    try {
+      // Loop for sequential delete or we could add a bulk endpoint if needed
+      // For now, consistent with existing hooks:
+      for (const id of Array.from(selectedIds)) {
+        await deleteLead.mutateAsync(id);
+      }
+      queryClient.invalidateQueries({ queryKey: getListLeadsQueryKey() });
+      setSelectedIds(new Set());
+      toast({ title: "Bulk delete successful", description: `${selectedIds.size} leads removed.` });
+    } catch (err: any) {
+      toast({ title: "Error", description: "Some leads could not be deleted", variant: "destructive" });
+    }
+  };
 
   const handleDelete = (id: string) => {
     if (!confirm("Are you sure you want to delete this lead?")) return;
@@ -57,14 +93,14 @@ export default function Leads() {
 
   const handleBulkDelete = () => {
     if (!selectedBulkTag) return;
-    if (!confirm(`WARNING: This will permanently delete ALL leads in the "${selectedBulkTag}" category. This action cannot be undone. Proceed?`)) return;
+    if (!confirm(`WARNING: This will permanently delete ALL leads tagged with "${selectedBulkTag}". This action cannot be undone. Proceed?`)) return;
 
     bulkDelete.mutate(selectedBulkTag, {
       onSuccess: (res) => {
         queryClient.invalidateQueries({ queryKey: getListLeadsQueryKey() });
         toast({ 
           title: "Bulk Deletion Complete", 
-          description: `Successfully removed ${res.deletedCount} leads from category: ${selectedBulkTag}` 
+          description: `Successfully removed ${res.deletedCount} leads with tag: ${selectedBulkTag}` 
         });
         setSelectedBulkTag("");
       },
@@ -82,47 +118,68 @@ export default function Leads() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full uppercase-titles">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-card/20">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Leads</h1>
+          <h1 className="text-xl font-semibold text-foreground">Leads Management</h1>
           <p className="text-sm text-muted-foreground">{total} total leads in current view</p>
         </div>
         <div className="flex items-center gap-3">
-           {/* Bulk Delete UI */}
-           {allTags.length > 0 && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-destructive/5 border border-destructive/20 rounded-md">
-              <span className="text-[10px] font-bold text-destructive uppercase tracking-wider">Bulk Actions:</span>
-              <select
-                value={selectedBulkTag}
-                onChange={(e) => setSelectedBulkTag(e.target.value)}
-                className="bg-transparent text-xs text-foreground focus:outline-none border-none py-0 pr-6"
-              >
-                <option value="">Select Category...</option>
-                {allTags.map(tag => (
-                  <option key={tag} value={tag}>{tag}</option>
-                ))}
-              </select>
-              <button
-                onClick={handleBulkDelete}
-                disabled={!selectedBulkTag || bulkDelete.isPending}
-                className="p-1 text-destructive hover:bg-destructive hover:text-white rounded transition-colors disabled:opacity-30"
-                title="Delete all leads in this category"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-
           <button
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm"
           >
             <Plus className="w-4 h-4" />
-            Add Lead
+            Add New Lead
           </button>
         </div>
+      </div>
+
+      {/* Bulk Action Bar - Dedicated Strip */}
+      <div className="px-6 py-2 bg-muted/30 border-b border-border flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 min-w-[200px]">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase">Bulk Clear by Tag:</span>
+            <select
+              value={selectedBulkTag}
+              onChange={(e) => setSelectedBulkTag(e.target.value)}
+              className="flex-1 bg-background border border-border text-xs text-foreground rounded py-1 px-2 focus:ring-1 focus:ring-primary outline-none"
+            >
+              <option value="">Choose Tag...</option>
+              {allTags.map(tag => (
+                <option key={tag} value={tag}>{tag}</option>
+              ))}
+            </select>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!selectedBulkTag || bulkDelete.isPending}
+              onClick={handleBulkDelete}
+              className="h-7 px-2 text-destructive border-destructive/20 hover:bg-destructive hover:text-white"
+            >
+              <Trash2 className="w-3 h-3" />
+            </Button>
+          </div>
+          
+          <div className="h-4 w-px bg-border mx-2" />
+          
+          <p className="text-[10px] text-muted-foreground font-medium uppercase">
+            Selection: <span className="text-primary">{selectedIds.size}</span> leads selected
+          </p>
+        </div>
+
+        {selectedIds.size > 0 && (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleDeleteSelected}
+            className="h-7 px-3 text-[10px] font-bold uppercase flex items-center gap-2"
+          >
+            <Trash2 className="w-3 h-3" />
+            Delete Selection
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -160,10 +217,19 @@ export default function Leads() {
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-background border-b border-border">
             <tr>
-              <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground">Business</th>
-              <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground">Category / Tags</th>
-              <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground">Score</th>
-              <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground">Industry</th>
+              <th className="px-4 py-2.5 w-10">
+                <input
+                  type="checkbox"
+                  checked={leads.length > 0 && selectedIds.size === leads.length}
+                  onChange={toggleSelectAll}
+                  className="rounded border-border text-primary focus:ring-primary"
+                />
+              </th>
+              <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase">Business</th>
+              <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground">Contact</th>
+              <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase">Score</th>
+              <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase">Tags</th>
+              <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase">Industry</th>
               <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground">Website</th>
               <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground">Stage</th>
               <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground">Actions</th>
@@ -188,7 +254,15 @@ export default function Leads() {
               </tr>
             ) : (
               leads.map((lead) => (
-                <tr key={lead.id} className="hover:bg-card/40 transition-colors">
+                <tr key={lead.id} className={`hover:bg-card/40 transition-colors ${selectedIds.has(lead.id) ? "bg-primary/5" : ""}`}>
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(lead.id)}
+                      onChange={() => toggleSelect(lead.id)}
+                      className="rounded border-border text-primary focus:ring-primary"
+                    />
+                  </td>
                   <td className="px-4 py-3">
                     <Link href={`/leads/${lead.id}`} className="font-medium text-foreground hover:text-primary transition-colors">
                       {lead.businessName}
@@ -196,20 +270,36 @@ export default function Leads() {
                     {lead.location && <div className="text-[10px] text-muted-foreground uppercase">{lead.location}</div>}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {lead.tags && lead.tags.length > 0 ? (
-                        lead.tags.map((tag, idx) => (
-                          <Badge key={idx} variant="outline" className="text-[10px] px-1.5 py-0 bg-primary/5 text-primary border-primary/20">
-                            {tag}
-                          </Badge>
-                        ))
+                    <div className="flex flex-col gap-1">
+                      {lead.email ? (
+                        <span className="text-xs text-foreground flex items-center gap-1">
+                          <Mail className="w-3 h-3 text-muted-foreground" />
+                          {lead.email}
+                        </span>
                       ) : (
-                        <span className="text-xs text-muted-foreground/40">—</span>
+                        <span className="text-[10px] text-muted-foreground/40 italic">No email</span>
+                      )}
+                      {lead.phone ? (
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Phone className="w-3 h-3" />
+                          {lead.phone}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground/40 italic">No phone</span>
                       )}
                     </div>
                   </td>
                   <td className="px-4 py-3">
                     <ScoreBadge category={lead.scoreCategory} score={lead.leadScore} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {lead.tags?.map(tag => (
+                        <Badge key={tag} variant="secondary" className="text-[9px] px-1.5 py-0 bg-primary/10 text-primary border-none">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground font-medium">{lead.industry ?? "—"}</td>
                   <td className="px-4 py-3">
@@ -332,40 +422,40 @@ function CreateLeadModal({ onClose, onSubmit, loading }: {
               className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Industry</label>
-              <input
-                value={form.industry}
-                onChange={(e) => setForm((f) => ({ ...f, industry: e.target.value }))}
-                className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Tags (comma separated)</label>
-              <input
-                value={form.tags}
-                onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))}
-                placeholder="Real Estate, Hot Lead"
-                className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-            </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Industry</label>
+            <input
+              value={form.industry}
+              onChange={(e) => setForm((f) => ({ ...f, industry: e.target.value }))}
+              className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Tags (comma separated)</label>
+            <input
+              value={form.tags || ""}
+              onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))}
+              placeholder="e.g. Real Estate, Hot Lead"
+              className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Email</label>
+              <label className="text-xs text-muted-foreground mb-1 block">Email Address (required if available)</label>
               <input
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                placeholder="john@example.com"
                 className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Phone</label>
+              <label className="text-xs text-muted-foreground mb-1 block">Phone Number (required if available)</label>
               <input
                 value={form.phone}
                 onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                placeholder="+1 234 567 890"
                 className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               />
             </div>

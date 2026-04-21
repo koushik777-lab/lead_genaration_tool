@@ -3,6 +3,7 @@ import {
   apiLeads,
   apiDashboard,
   apiCrm,
+  apiCrmPush,
   apiOutreach,
   getListLeadsQueryKey,
   getGetLeadQueryKey,
@@ -162,6 +163,17 @@ export function useUpdateLeadStage() {
   });
 }
 
+// ─── CRM Push Hooks ────────────────────────────────────────────────────────
+export function usePushToCrm() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (leadIds: string[]) => apiCrmPush.pushLeads(leadIds),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/leads"] });
+    },
+  });
+}
+
 // ─── Outreach Hooks ──────────────────────────────────────────────────────────
 
 export function useListCampaigns() {
@@ -179,6 +191,16 @@ export function useCreateCampaign() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() });
     },
+  });
+}
+
+export function useToggleCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiOutreach.toggleCampaignStatus(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() });
+    }
   });
 }
 

@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 const leadSchema = new mongoose.Schema(
   {
     businessName: { type: String, required: true },
+    googlePlaceId: { type: String, unique: true, sparse: true },
     ownerName: { type: String, default: null },
     email: { type: String, default: null },
     phone: { type: String, default: null },
@@ -29,6 +30,9 @@ const leadSchema = new mongoose.Schema(
     noSocialPresence: { type: Boolean, default: false },
     mobileUnfriendly: { type: Boolean, default: false },
     aiInsight: { type: String, default: null },
+    pushStatus: { type: String, default: "pending", enum: ["pending", "sent", "failed"] },
+    sentAt: { type: Date, default: null },
+    errorMessage: { type: String, default: null },
   },
   { timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" } }
 );

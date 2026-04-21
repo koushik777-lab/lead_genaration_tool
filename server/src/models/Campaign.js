@@ -9,6 +9,8 @@ const campaignSchema = new mongoose.Schema(
     sentCount: { type: Number, default: 0 },
     openCount: { type: Number, default: 0 },
     replyCount: { type: Number, default: 0 },
+    isScheduled: { type: Boolean, default: false },
+    scheduledAt: { type: Date, default: null },
   },
   { timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" } }
 );
